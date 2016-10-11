@@ -85,7 +85,7 @@ class MockLive:
 
 
 class MockArray:
-    array_id = 'noise'
+    name = 'noise'
 
     def init_data(self):
         self.ready = True
@@ -97,7 +97,7 @@ def DataSet1D(location=None, name=None):
     # TODO: since y lists x as a set_array, it should automatically
     # set is_setpoint=True for x, shouldn't it? Any reason we woundn't
     # want that?
-    x = DataArray(name='x', label='X', preset_data=(1., 2., 3., 4., 5.),
+    x = DataArray(name='x_set', label='X', preset_data=(1., 2., 3., 4., 5.),
                   is_setpoint=True)
     y = DataArray(name='y', label='Y', preset_data=(3., 4., 5., 6., 7.),
                   set_arrays=(x,))
@@ -110,8 +110,8 @@ def DataSet2D(location=None, name=None):
     zz = xx**2+yy**2
     # outer setpoint should be 1D
     xx = xx[:, 0]
-    x = DataArray(name='x', label='X', preset_data=xx, is_setpoint=True)
-    y = DataArray(name='y', label='Y', preset_data=yy, set_arrays=(x,),
+    x = DataArray(name='x_set', label='X', preset_data=xx, is_setpoint=True)
+    y = DataArray(name='y_set', label='Y', preset_data=yy, set_arrays=(x,),
                   is_setpoint=True)
     z = DataArray(name='z', label='Z', preset_data=zz, set_arrays=(x, y))
     return new_data(arrays=(x, y, z), location=location, name=name)
@@ -131,16 +131,16 @@ def file_1d():
 
 def DataSetCombined(location=None):
     # Complex DataSet with two 1D and two 2D arrays
-    x = DataArray(name='x', label='X!', preset_data=(16., 17.),
+    x = DataArray(name='x_set', label='X!', preset_data=(16., 17.),
                   is_setpoint=True)
     y1 = DataArray(name='y1', label='Y1 value', preset_data=(18., 19.),
                    set_arrays=(x,))
     y2 = DataArray(name='y2', label='Y2 value', preset_data=(20., 21.),
                    set_arrays=(x,))
 
-    yset = DataArray(name='y', label='Y', preset_data=(22., 23., 24.),
+    yset = DataArray(name='y_set', label='Y', preset_data=(22., 23., 24.),
                      is_setpoint=True)
-    yset.nest(2, 0, x)
+    yset.nest(2, set_array=x)
     z1 = DataArray(name='z1', label='Z1',
                    preset_data=((25., 26., 27.), (28., 29., 30.)),
                    set_arrays=(x, yset))

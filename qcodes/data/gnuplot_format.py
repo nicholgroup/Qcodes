@@ -341,8 +341,8 @@ class GNUPlotFormat(Formatter):
     def _make_header(self, group):
         ids, labels = [], []
         for array in group.set_arrays + group.data:
-            ids.append(array.array_id)
-            label = getattr(array, 'label', array.array_id)
+            ids.append(array.name)
+            label = getattr(array, 'label', array.name)
             label = label.replace('\\', '\\\\').replace('"', '\\"')
             labels.append('"' + label + '"')
 

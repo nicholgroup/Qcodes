@@ -277,9 +277,8 @@ class DataSet(DelegateAttributes):
 
         self.metadata = {}
 
-        self.arrays = {}
+        self.arrays = OrderedDict()
         if arrays:
-            self.action_id_map = self._clean_array_ids(arrays)
             for array in arrays:
                 self.add_array(array)
 
@@ -536,50 +535,13 @@ class DataSet(DelegateAttributes):
             ValueError: if there is already an array with this id here.
         """
         # TODO: mask self.arrays so you *can't* set it directly?
-
-        if data_array.array_id in self.arrays:
+        if data_array.name in self.arrays:
             raise ValueError('array_id {} already exists in this '
-                             'DataSet'.format(data_array.array_id))
-        self.arrays[data_array.array_id] = data_array
+                             'DataSet'.format(data_array.name))
+        self.arrays[data_array.name] = data_array
 
         # back-reference to the DataSet
         data_array.data_set = self
-
-    def _clean_array_ids(self, arrays):
-        """
-        replace action_indices tuple with compact string array_ids
-        stripping off as much extraneous info as possible
-        """
-
-        action_indices = [array.action_indices for array in arrays]
-        for array in arrays:
-            name = array.full_name
-            if array.is_setpoint and name and not name.endswith('_set'):
-                name += '_set'
-
-            array.array_id = name
-        array_ids = set([array.array_id for array in arrays])
-        for name in array_ids:
-            param_arrays = [array for array in arrays
-                            if array.array_id == name]
-            self._clean_param_ids(param_arrays, name)
-
-        array_ids = [array.array_id for array in arrays]
-
-        return dict(zip(action_indices, array_ids))
-
-    def _clean_param_ids(self, arrays, name):
-        # strip off as many leading equal indices as possible
-        # and append the rest to the back of the name with underscores
-        param_action_indices = [list(array.action_indices) for array in arrays]
-        while all(len(ai) for ai in param_action_indices):
-            if len(set(ai[0] for ai in param_action_indices)) == 1:
-                for ai in param_action_indices:
-                    ai[:1] = []
-            else:
-                break
-        for array, ai in zip(arrays, param_action_indices):
-            array.array_id = name + ''.join('_' + str(i) for i in ai)
 
     def store(self, loop_indices, ids_values):
         """
@@ -611,7 +573,8 @@ class DataSet(DelegateAttributes):
                     time.time() > self.last_write + self.write_period):
                 self.write()
                 self.last_write = time.time()
-        else: # in PULL_FROM_SERVER mode; store() isn't legal
+        else:
+            # in PULL_FROM_SERVER mode; store() isn't legal
             raise RuntimeError('This object is pulling from a DataServer, '
                                'so data insertion is not allowed.')
 
@@ -779,11 +742,7 @@ class DataSet(DelegateAttributes):
 
         arr_info = [['<Type>', '<array_id>', '<array.name>', '<array.shape>']]
 
-        if hasattr(self, 'action_id_map'):
-            id_items = [
-                item for index, item in sorted(self.action_id_map.items())]
-        else:
-            id_items = self.arrays.keys()
+        id_items = self.arrays.keys()
 
         for array_id in id_items:
             array = self.arrays[array_id]

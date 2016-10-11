@@ -35,42 +35,31 @@ class TestDataArray(TestCase):
 
         name = 'Oscar'
         label = 'The grouch. GRR!'
-        fullname = 'ernie'
-        array_id = 24601
         set_arrays = ('awesomeness', 'chocolate content')
         shape = 'Ginornous'
-        action_indices = (1, 2, 3, 4, 5)
 
         p_data = DataArray(parameter=MockParam(pfullname), name=name,
-                           label=label, full_name=fullname)
+                           label=label)
         p_data2 = DataArray(parameter=MockParam(pfullname))
 
         # explicitly given name and label override parameter vals
         self.assertEqual(p_data.name, name)
         self.assertEqual(p_data.label, label)
-        self.assertEqual(p_data.full_name, fullname)
         self.assertEqual(p_data2.name, pname)
         self.assertEqual(p_data2.label, plabel)
-        self.assertEqual(p_data2.full_name, pfullname)
         # test default values
-        self.assertIsNone(p_data.array_id)
         self.assertEqual(p_data.shape, ())
-        self.assertEqual(p_data.action_indices, ())
         self.assertEqual(p_data.set_arrays, ())
         self.assertIsNone(p_data.ndarray)
 
-        np_data = DataArray(name=name, label=label, array_id=array_id,
-                            set_arrays=set_arrays, shape=shape,
-                            action_indices=action_indices)
+        np_data = DataArray(name=name, label=label,
+                            set_arrays=set_arrays, shape=shape)
         self.assertEqual(np_data.name, name)
         self.assertEqual(np_data.label, label)
         # no full name or parameter - use name
-        self.assertEqual(np_data.full_name, name)
         # test simple assignments
-        self.assertEqual(np_data.array_id, array_id)
         self.assertEqual(np_data.set_arrays, set_arrays)
         self.assertEqual(np_data.shape, shape)
-        self.assertEqual(np_data.action_indices, action_indices)
 
         name_data = DataArray(name=name)
         self.assertEqual(name_data.label, name)
@@ -187,14 +176,8 @@ class TestDataArray(TestCase):
     def test_repr(self):
         array2d = [[1, 2], [3, 4]]
         arrayrepr = repr(np.array(array2d))
-        array_id = (3, 4)
         data = DataArray(preset_data=array2d)
-
         self.assertEqual(repr(data), 'DataArray[2,2]:\n' + arrayrepr)
-
-        data.array_id = array_id
-        self.assertEqual(repr(data), 'DataArray[2,2]: ' + str(array_id) +
-                         '\n' + arrayrepr)
 
     def test_nest_empty(self):
         data = DataArray()
@@ -204,15 +187,14 @@ class TestDataArray(TestCase):
         mock_set_array = 'not really an array but we don\'t check'
         mock_set_array2 = 'another one'
 
-        data.nest(2, action_index=44, set_array=mock_set_array)
-        data.nest(3, action_index=66, set_array=mock_set_array2)
+        data.nest(2, set_array=mock_set_array)
+        data.nest(3, set_array=mock_set_array2)
 
         # the array doesn't exist until you initialize it
         self.assertIsNone(data.ndarray)
 
         # but other attributes are set
         self.assertEqual(data.shape, (3, 2))
-        self.assertEqual(data.action_indices, (66, 44))
         self.assertEqual(data.set_arrays, (mock_set_array2, mock_set_array))
 
         data.init_data()
@@ -228,7 +210,6 @@ class TestDataArray(TestCase):
         data.nest(3)
         self.assertEqual(data.shape, (3, 2))
         self.assertEqual(data.ndarray.tolist(), [[1, 2]] * 3)
-        self.assertEqual(data.action_indices, ())
         self.assertEqual(data.set_arrays, (data,))
 
         # test that the modified range gets correctly set to
@@ -449,14 +430,17 @@ class TestDataSet(TestCase):
         mock_dm.live_data = MockLive()
 
         # wrong location or False location - converts to local
-        data = DataSet(location='Jupiter', data_manager=True, mode=DataMode.PULL_FROM_SERVER)
+        data = DataSet(location='Jupiter', data_manager=True,
+                       mode=DataMode.PULL_FROM_SERVER)
         self.assertEqual(data.mode, DataMode.LOCAL)
 
-        data = DataSet(location=False,  data_manager=True, mode=DataMode.PULL_FROM_SERVER)
+        data = DataSet(location=False,  data_manager=True,
+                       mode=DataMode.PULL_FROM_SERVER)
         self.assertEqual(data.mode, DataMode.LOCAL)
 
         # location matching server - stays in server mode
-        data = DataSet(location='Mars',  data_manager=True, mode=DataMode.PULL_FROM_SERVER,
+        data = DataSet(location='Mars',  data_manager=True,
+                       mode=DataMode.PULL_FROM_SERVER,
                        formatter=MockFormatter())
         self.assertEqual(data.mode, DataMode.PULL_FROM_SERVER)
         self.assertEqual(data.arrays, MockLive.arrays)
@@ -495,7 +479,8 @@ class TestDataSet(TestCase):
         mock_dm.needs_restart = True
         gdm_mock.return_value = mock_dm
 
-        data = DataSet(location='Venus', data_manager=True, mode=DataMode.PUSH_TO_SERVER)
+        data = DataSet(location='Venus', data_manager=True,
+                       mode=DataMode.PUSH_TO_SERVER)
         self.assertEqual(mock_dm.needs_restart, False, data)
         self.assertEqual(mock_dm.data_set, data)
         self.assertEqual(data.data_manager, mock_dm)

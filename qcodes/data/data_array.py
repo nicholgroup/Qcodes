@@ -11,10 +11,10 @@ class DataArray(DelegateAttributes):
 
     If this is a measured parameter, This object doesn't contain
     the data of the setpoints it was measured at, but it references
-    the DataArray objects of these parameters. Those objects only have
-    the dimensionality at which they were set - ie the inner loop setpoint
-    the same dimensionality as the measured parameter, but the outer
-    loop setpoint(s) have lower dimensionality
+    the DataArray objects of these parameters.
+    Those objects only have the dimensionality at which they were set - ie the
+    inner loop setpoint the same dimensionality as the measured parameter, but
+    the outer loop setpoint(s) have lower dimensionality
 
     When it's first created, a DataArray has no dimensionality, you must call
     .nest for each dimension.
@@ -27,15 +27,14 @@ class DataArray(DelegateAttributes):
     because we delegate attributes through to the numpy array
 
     Args:
+        # TODO(giulioungaretti): remove coupling, array should not know
+        # about param, but just get the info about it
         parameter (Optional[Parameter]): The parameter whose values will
-            populate this array, if any. Will copy ``name``, ``full_name``,
+            populate this array, if any. Will copy ``name``, ``name``,
             ``label``, ``units``, and ``snapshot`` from here unless you
             provide them explicitly.
 
-        name (Optional[str]): The short name of this array.
-            TODO: use full_name as name, and get rid of short name
-
-        full_name (Optional[str]): The complete name of this array. If the
+        name (str): The friendly  name of this array. If the
             array is based on a parameter linked to an instrument, this is
             typically '<instrument_name>_<param_name>'
 
@@ -43,15 +42,6 @@ class DataArray(DelegateAttributes):
             use for axis and colorbar labels on plots.
 
         snapshot (Optional[dict]): Metadata snapshot to save with this array.
-
-        array_id (Optional[str]): A name for this array that's unique within
-            its ``DataSet``. Typically the full_name, but when the ``DataSet``
-            is constructed we will append '_<i>' (``i`` is an integer starting
-            from 1) if necessary to differentiate arrays with the same id.
-            TODO: this only happens for arrays provided to the DataSet
-            constructor, not those added with add_array. Fix this!
-            Also, do we really need array_id *and* full_name (let alone name
-            but I've already said we should remove this)?
 
         set_arrays (Optional[Tuple[DataArray]]): If this array is being
             created with shape already, you can provide one setpoint array
@@ -61,13 +51,8 @@ class DataArray(DelegateAttributes):
         shape (Optional[Tuple[int]]): The shape (as in numpy) of the array.
             Will be prepended with new dimensions by any calls to ``nest``.
 
-        action_indices (Optional[Tuple[int]]): If used within a ``Loop``,
-            these are the indices at each level of nesting within the
-            ``Loop`` of the loop action that's populating this array.
-            TODO: this shouldn't be in DataArray at all, the loop should
-            handle converting this to array_id internally (maybe it
-            already does?)
-
+        # TODO (giulioungaretti) params has units, array has units, nuke one or
+        # the other!
         units (Optional[str]): The units of the values stored in this array.
 
         is_setpoint (bool): True if this is a setpoint array, False if it
@@ -81,12 +66,10 @@ class DataArray(DelegateAttributes):
 
     # attributes of self to include in the snapshot
     SNAP_ATTRS = (
-        'array_id',
         'name',
         'shape',
         'units',
         'label',
-        'action_indices',
         'is_setpoint')
 
     # attributes of the parameter (or keys in the incoming snapshot)
@@ -102,22 +85,17 @@ class DataArray(DelegateAttributes):
         'value',
         '__class__',
         'set_arrays',
-        'shape',
-        'array_id',
-        'action_indices')
+        'shape')
 
-    def __init__(self, parameter=None, name=None, full_name=None, label=None,
-                 snapshot=None, array_id=None, set_arrays=(), shape=None,
-                 action_indices=(), units=None, is_setpoint=False,
+    def __init__(self, parameter=None, name=None, label=None,
+                 snapshot=None,  set_arrays=(), shape=None,
+                 units=None, is_setpoint=False,
                  preset_data=None):
         self.name = name
-        self.full_name = full_name or name
         self.label = label
         self.shape = shape
         self.units = units
-        self.array_id = array_id
         self.is_setpoint = is_setpoint
-        self.action_indices = action_indices
         self.set_arrays = set_arrays
 
         self._preset = False
@@ -135,13 +113,14 @@ class DataArray(DelegateAttributes):
         self._snapshot_input = {}
 
         if parameter is not None:
-            param_full_name = getattr(parameter, 'full_name', None)
-            if param_full_name and not full_name:
-                self.full_name = parameter.full_name
+            param_name = getattr(parameter, 'name', None)
+            if param_name and not name:
+                self.name = parameter.name
 
             if hasattr(parameter, 'snapshot') and not snapshot:
                 snapshot = parameter.snapshot()
             else:
+                # TODO(giulioungaretti) ok lol needs to be fixed, srly
                 # TODO: why is this in an else clause?
                 for attr in self.COPY_ATTRS_FROM_INPUT:
                     if (hasattr(parameter, attr) and
@@ -182,7 +161,7 @@ class DataArray(DelegateAttributes):
             raise RuntimeError('A DataArray can only be part of one DataSet')
         self._data_set = new_data_set
 
-    def nest(self, size, action_index=None, set_array=None):
+    def nest(self, size, set_array=None):
         """
         Nest this array inside a new outer loop.
 
@@ -195,13 +174,8 @@ class DataArray(DelegateAttributes):
         Args:
             size (int): Length of the new loop.
 
-            action_index (Optional[int]): Within the outer loop at this
-                nesting level, which action does this array derive from?
-
             set_array (Optional[DataArray]): The setpoints of the new outer
-                loop. If this DataArray *is* a setpoint array, you should
-                omit both ``action_index`` and ``set_array``, and it will
-                reference itself as the inner setpoint array.
+                loop.
 
         Returns:
             DataArray: self, in case you want to construct the array with
@@ -217,9 +191,6 @@ class DataArray(DelegateAttributes):
             set_array = self
 
         self.shape = (size, ) + self.shape
-
-        if action_index is not None:
-            self.action_indices = (action_index, ) + self.action_indices
 
         self.set_arrays = (set_array, ) + self.set_arrays
 
@@ -239,6 +210,10 @@ class DataArray(DelegateAttributes):
 
     def init_data(self, data=None):
         """
+        # TODO (giulioungaretti): in 2016 creating an array with fixed size
+        # feels a bit démodé, and breaks open ended measurements, data
+        # streaming and this ain't igor, so why? Find a vaild reason or nuke
+
         Create the actual numpy array to hold data.
 
         The array will be sized based on either ``self.shape`` or
@@ -480,10 +455,10 @@ class DataArray(DelegateAttributes):
         self.synced_index = stop
 
     def __repr__(self):
-        array_id_or_none = ' {}'.format(self.array_id) if self.array_id else ''
+        name = self.name or ""
         return '{}[{}]:{}\n{}'.format(self.__class__.__name__,
                                       ','.join(map(str, self.shape)),
-                                      array_id_or_none, repr(self.ndarray))
+                                      name, repr(self.ndarray))
 
     def snapshot(self, update=False):
         """JSON representation of this DataArray."""

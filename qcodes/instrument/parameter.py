@@ -36,11 +36,12 @@ Measured parameters should have .get() which can return:
     define .names (and .labels) AND .shape (and .setpoints)
 """
 
-from datetime import datetime, timedelta
-import time
+import collections
 import logging
 import os
-import collections
+import time
+from datetime import datetime, timedelta
+
 
 from qcodes.utils.deferred_operations import DeferredOperations
 from qcodes.utils.helpers import (permissive_range, wait_secs, is_sequence_of,
@@ -161,6 +162,10 @@ class Parameter(Metadatable, DeferredOperations):
         # always let the parameter have a single name (in fact, require this!)
         # even if it has names too
         self.name = str(name)
+            
+        # parameters can have the same name but be different (i.e. measured at
+        # different times)
+        self.uuid = None
 
         if names is not None:
             # check for names first - that way you can provide both name

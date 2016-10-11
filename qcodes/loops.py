@@ -398,7 +398,6 @@ class ActiveLoop(Metadatable):
         self.bg_task = bg_task
         self.bg_min_delay = bg_min_delay
         self.data_set = None
-
         # compile now, but don't save the results
         # just used for preemptive error checking
         # if we saved the results, we wouldn't capture nesting
@@ -463,7 +462,7 @@ class ActiveLoop(Metadatable):
             'then_actions': _actions_snapshot(self.then_actions, update)
         }
 
-    def containers(self):
+    def containers(self, nest_level=0, index=0):
         """
         Finds the data arrays that will be created by the actions in this
         loop, and nests them inside this level of the loop.
@@ -471,21 +470,24 @@ class ActiveLoop(Metadatable):
         Recursively calls `.containers` on any enclosed actions.
         """
         loop_size = len(self.sweep_values)
+        par = self.sweep_values.parameter
+        sweep_index = index+nest_level
+        par.uuid = "{}_set_{}".format(par.full_name, str(sweep_index))
         loop_array = DataArray(parameter=self.sweep_values.parameter,
+                               name=self.sweep_values.parameter.uuid,
                                is_setpoint=True)
         loop_array.nest(size=loop_size)
-
         data_arrays = [loop_array]
-
         for i, action in enumerate(self.actions):
             if hasattr(action, 'containers'):
-                action_arrays = action.containers()
+                action_arrays = action.containers(nest_level+1, i)
 
             elif hasattr(action, 'get'):
                 # this action is a parameter to measure
                 # note that this supports lists (separate output arrays)
                 # and arrays (nested in one/each output array) of return values
-                action_arrays = self._parameter_arrays(action)
+                action_index = "{}_{}".format(sweep_index, i)
+                action_arrays = self._parameter_arrays(action, action_index=action_index)
 
             else:
                 # this *is* covered but the report misses it because Python
@@ -494,13 +496,11 @@ class ActiveLoop(Metadatable):
                 continue  # pragma: no cover
 
             for array in action_arrays:
-                array.nest(size=loop_size, action_index=i,
-                           set_array=loop_array)
+                array.nest(size=loop_size, set_array=loop_array)
             data_arrays.extend(action_arrays)
-
         return data_arrays
 
-    def _parameter_arrays(self, action):
+    def _parameter_arrays(self, action, action_index):
         out = []
 
         # first massage all the input parameters to the general multi-name form
@@ -545,7 +545,6 @@ class ActiveLoop(Metadatable):
         for name, full_name, label, shape, i, sp_vi, sp_ni, sp_li in zip(
                 names, full_names, labels, shapes, action_indices,
                 sp_vals, sp_names, sp_labels):
-
             if shape is None or shape == ():
                 shape, sp_vi, sp_ni, sp_li = (), (), (), ()
             else:
@@ -555,6 +554,10 @@ class ActiveLoop(Metadatable):
                 sp_li = self._fill_blank(sp_li, sp_blank)
 
             setpoints = ()
+
+            # TODO(giulioungaretti): whatever this loop is doing
+            # has to be written in a human readable way
+
             # loop through dimensions of shape to make the setpoint arrays
             for j, (vij, nij, lij) in enumerate(zip(sp_vi, sp_ni, sp_li)):
                 sp_def = (shape[: 1 + j], j, setpoints, vij, nij, lij)
@@ -564,9 +567,10 @@ class ActiveLoop(Metadatable):
                 setpoints = setpoints + (all_setpoints[sp_def],)
 
             # finally, make the output data array with these setpoints
-            out.append(DataArray(name=name, full_name=full_name, label=label,
-                                 shape=shape, action_indices=i,
-                                 set_arrays=setpoints, parameter=action))
+            name = "{}_{}".format(full_name, action_index)
+            out.append(DataArray(name=name, label=label,
+                                 shape=shape, set_arrays=setpoints,
+                                 parameter=action))
 
         return out
 
@@ -893,7 +897,8 @@ class ActiveLoop(Metadatable):
             self.sweep_values.set(value)
             new_indices = loop_indices + (i,)
             new_values = current_values + (value,)
-            set_name = self.data_set.action_id_map[action_indices]
+
+            set_name = self.sweep_values.parameter.uuid
             self.data_set.store(new_indices, {set_name: value})
 
             if not self._nest_first:

@@ -193,7 +193,6 @@ class TestGNUPlotFormat(TestCase):
     def checkArrayAttrs(self, a, b):
         self.assertEqual(a.tolist(), b.tolist())
         self.assertEqual(a.label, b.label)
-        self.assertEqual(a.array_id, b.array_id)
 
     def test_full_write(self):
         formatter = GNUPlotFormat()
@@ -409,6 +408,6 @@ class TestGNUPlotFormat(TestCase):
         data2 = DataSet(location=location)
         formatter.read(data2)
 
-        for array_id in ('x_set', 'y1', 'y2', 'y_set', 'z1', 'z2'):
-            self.checkArraysEqual(data2.arrays[array_id],
-                                  data.arrays[array_id])
+        for name in ('x_set', 'y1', 'y2', 'y_set', 'z1', 'z2'):
+            self.checkArraysEqual(data2.arrays[name],
+                                  data.arrays[name])

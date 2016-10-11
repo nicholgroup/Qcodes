@@ -124,8 +124,9 @@ class _Measure:
                 self.param_ids.append(None)
                 self.composite.append(part_ids)
             else:
-                param_id = data_set.action_id_map[action_indices]
-                self.param_ids.append(param_id)
+                id = str(action_indices[-1])
+                param.uuid = "{}_{}".format(param.full_name, str(id))
+                self.param_ids.append(param.uuid)
                 self.composite.append(False)
 
     def __call__(self, loop_indices, **ignore_kwargs):
@@ -142,7 +143,6 @@ class _Measure:
                     out_dict[part_id] = val
             else:
                 out_dict[param_id] = param_out
-
         self.store(loop_indices, out_dict)
 
 
