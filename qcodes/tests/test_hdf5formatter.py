@@ -190,8 +190,7 @@ class TestHDF5_Format(TestCase):
 
         data2 = DataSet(location=data.location,
                         formatter=self.formatter)
-        d_array = DataArray(name='dummy',
-                            array_id='x_set',  # existing array id in data
+        d_array = DataArray(name='x_set',  # existing array id in data
                             label='bla', units='a.u.', is_setpoint=False,
                             set_arrays=(), preset_data=np.zeros(5))
         data2.add_array(d_array)
@@ -262,7 +261,7 @@ class TestHDF5_Format(TestCase):
     def test_dataset_with_missing_attrs(self):
         data1 = new_data(formatter=self.formatter, location=self.loc_provider,
                          name='test_missing_attr')
-        arr = DataArray(array_id='arr', preset_data=np.linspace(0, 10, 21))
+        arr = DataArray(name='arr', preset_data=np.linspace(0, 10, 21))
         data1.add_array(arr)
         data1.write()
         # data2 = DataSet(location=data1.location, formatter=self.formatter)
