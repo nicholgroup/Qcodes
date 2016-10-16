@@ -116,50 +116,50 @@ class GNUPlotFormat(Formatter):
         data_arrays = []
         indexed_ids = list(enumerate(ids))
 
-        for i, array_id in indexed_ids[:ndim]:
-            snap = data_set.get_array_metadata(array_id)
+        for i, name in indexed_ids[:ndim]:
+            snap = data_set.get_array_metadata(name)
 
             # setpoint arrays
             set_shape = shape[: i + 1]
-            if array_id in arrays:
-                set_array = arrays[array_id]
+            if name in arrays:
+                set_array = arrays[name]
                 if set_array.shape != set_shape:
                     raise ValueError(
-                        'shapes do not match for set array: ' + array_id)
-                if array_id not in ids_read:
+                        'shapes do not match for set array: ' + name)
+                if name not in ids_read:
                     # it's OK for setpoints to be duplicated across
                     # multiple files, but we should only empty the
                     # array out the first time we see it, so subsequent
                     # reads can check for consistency
                     set_array.clear()
             else:
-                set_array = DataArray(label=labels[i], array_id=array_id,
+                set_array = DataArray(label=labels[i], name=name,
                                       set_arrays=set_arrays, shape=set_shape,
                                       is_setpoint=True, snapshot=snap)
                 set_array.init_data()
                 data_set.add_array(set_array)
 
             set_arrays = set_arrays + (set_array, )
-            ids_read.add(array_id)
+            ids_read.add(name)
 
-        for i, array_id in indexed_ids[ndim:]:
-            snap = data_set.get_array_metadata(array_id)
+        for i, name in indexed_ids[ndim:]:
+            snap = data_set.get_array_metadata(name)
 
             # data arrays
-            if array_id in ids_read:
-                raise ValueError('duplicate data id found: ' + array_id)
+            if name in ids_read:
+                raise ValueError('duplicate data id found: ' + name)
 
-            if array_id in arrays:
-                data_array = arrays[array_id]
+            if name in arrays:
+                data_array = arrays[name]
                 data_array.clear()
             else:
-                data_array = DataArray(label=labels[i], array_id=array_id,
+                data_array = DataArray(label=labels[i], name=name,
                                        set_arrays=set_arrays, shape=shape,
                                        snapshot=snap)
                 data_array.init_data()
                 data_set.add_array(data_array)
             data_arrays.append(data_array)
-            ids_read.add(array_id)
+            ids_read.add(name)
 
         indices = [0] * ndim
         first_point = True

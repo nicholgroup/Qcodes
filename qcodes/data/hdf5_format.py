@@ -52,11 +52,11 @@ class HDF5Format(Formatter):
         """
         self._open_file(data_set, location)
 
-        for i, array_id in enumerate(
+        for i, name in enumerate(
                 data_set._h5_base_group['Data Arrays'].keys()):
             # Decoding string is needed because of h5py/issues/379
-            name = array_id  # will be overwritten if not in file
-            dat_arr = data_set._h5_base_group['Data Arrays'][array_id]
+            name = name  # will be overwritten if not in file
+            dat_arr = data_set._h5_base_group['Data Arrays'][name]
 
             # write ensures these attributes always exist
             name = dat_arr.attrs['name'].decode()
@@ -71,15 +71,15 @@ class HDF5Format(Formatter):
             vals = dat_arr.value[:, 0]
             if 'shape' in dat_arr.attrs.keys():
                 vals = vals.reshape(dat_arr.attrs['shape'])
-            if array_id not in data_set.arrays.keys():  # create new array
+            if name not in data_set.arrays.keys():  # create new array
                 d_array = DataArray(
-                    name=name, array_id=array_id, label=label, parameter=None,
+                    name=name, name=name, label=label, parameter=None,
                     units=units,
                     is_setpoint=is_setpoint, set_arrays=(),
                     preset_data=vals)
                 data_set.add_array(d_array)
             else:  # update existing array with extracted values
-                d_array = data_set.arrays[array_id]
+                d_array = data_set.arrays[name]
                 d_array.name = name
                 d_array.label = label
                 d_array.units = units
@@ -87,11 +87,11 @@ class HDF5Format(Formatter):
                 d_array.ndarray = vals
                 d_array.shape = dat_arr.attrs['shape']
             # needed because I cannot add set_arrays at this point
-            data_set.arrays[array_id]._sa_array_ids = set_arrays
+            data_set.arrays[name]._sa_array_ids = set_arrays
 
         # Add copy/ref of setarrays (not array id only)
         # Note, this is not pretty but a result of how the dataset works
-        for array_id, d_array in data_set.arrays.items():
+        for name, d_array in data_set.arrays.items():
             for sa_id in d_array._sa_array_ids:
                 d_array.set_arrays += (data_set.arrays[sa_id], )
         data_set = self.read_metadata(data_set)
@@ -157,17 +157,17 @@ class HDF5Format(Formatter):
         else:
             arr_group = data_set._h5_base_group[data_name]
 
-        for array_id in data_set.arrays.keys():
-            if array_id not in arr_group.keys() or force_write:
-                self._create_dataarray_dset(array=data_set.arrays[array_id],
+        for name in data_set.arrays.keys():
+            if name not in arr_group.keys() or force_write:
+                self._create_dataarray_dset(array=data_set.arrays[name],
                                             group=arr_group)
-            dset = arr_group[array_id]
+            dset = arr_group[name]
             # Resize the dataset and add the new values
 
             # dataset refers to the hdf5 dataset here
             datasetshape = dset.shape
             old_dlen = datasetshape[0]
-            x = data_set.arrays[array_id]
+            x = data_set.arrays[name]
             new_dlen = len(x[~np.isnan(x)])
             new_datasetshape = (new_dlen,
                                 datasetshape[1])
@@ -196,16 +196,16 @@ class HDF5Format(Formatter):
         note that the attribute "units" is used for shape determination
         in the case of tuple-like variables.
         '''
-        # Check for empty meta attributes, use array_id if name and/or label
+        # Check for empty meta attributes, use name if name and/or label
         # is not specified
         if array.label is not None:
             label = array.label
         else:
-            label = array.array_id
+            label = array.name
         if array.name is not None:
             name = array.name
         else:
-            name = array.array_id
+            name = array.name
         if array.units is None:
             array.units = ['']  # used for shape determination
         units = array.units
@@ -215,7 +215,7 @@ class HDF5Format(Formatter):
         else:
             n_cols = len(array.units)
         dset = group.create_dataset(
-            array.array_id, (0, n_cols),
+            array.name, (0, n_cols),
             maxshape=(None, n_cols))
         dset.attrs['label'] = _encode_to_utf8(str(label))
         dset.attrs['name'] = _encode_to_utf8(str(name))
@@ -226,7 +226,7 @@ class HDF5Format(Formatter):
         # list will remain empty if array does not have set_array
         for i in range(len(array.set_arrays)):
             set_arrays += [_encode_to_utf8(
-                str(array.set_arrays[i].array_id))]
+                str(array.set_arrays[i].name))]
         dset.attrs['set_arrays'] = set_arrays
 
         return dset

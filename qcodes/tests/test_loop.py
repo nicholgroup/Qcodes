@@ -309,7 +309,7 @@ class TestLoop(TestCase):
         expected = ('DataSet:\n'
                     '   mode     = DataMode.LOCAL\n'
                     '   location = False\n'
-                    '   <Type>   | <array_id> | <array.name> | <array.shape>\n'
+                    '   <Type>   | <name> | <array.name> | <array.shape>\n'
                     '   Setpoint | p1_set     | p1           | (2,)\n'
                     '   Measured | p3         | p3           | (2,)\n'
                     '   Measured | p2_1       | p2           | (2,)\n'

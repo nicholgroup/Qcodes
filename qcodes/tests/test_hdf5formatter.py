@@ -48,7 +48,7 @@ class TestHDF5_Format(TestCase):
     def checkArrayAttrs(self, a, b):
         self.assertEqual(a.tolist(), b.tolist())
         self.assertEqual(a.label, b.label)
-        self.assertEqual(a.array_id, b.array_id)
+        self.assertEqual(a.name, b.name)
 
     def test_full_write_read_1D(self):
         """

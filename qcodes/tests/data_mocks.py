@@ -54,13 +54,13 @@ class RecordingMockFormatter:
         self.write_calls.append((io_manager.base_location, location))
 
         self.modified_ranges.append({
-            array_id: array.modified_range
-            for array_id, array in data_set.arrays.items()
+            name: array.modified_range
+            for name, array in data_set.arrays.items()
         })
 
         self.last_saved_indices.append({
-            array_id: array.last_saved_index
-            for array_id, array in data_set.arrays.items()
+            name: array.last_saved_index
+            for name, array in data_set.arrays.items()
         })
 
     def write_metadata(self, data_set, io_manager, location, read_first=True):

@@ -402,14 +402,14 @@ class DataSet(DelegateAttributes):
         with self.data_manager.query_lock:
             if self.is_on_server:
                 synced_indices = {
-                    array_id: array.get_synced_index()
-                    for array_id, array in self.arrays.items()
+                    name: array.get_synced_index()
+                    for name, array in self.arrays.items()
                 }
 
                 changes = self.data_manager.ask('get_changes', synced_indices)
 
-                for array_id, array_changes in changes.items():
-                    self.arrays[array_id].apply_changes(**array_changes)
+                for name, array_changes in changes.items():
+                    self.arrays[name].apply_changes(**array_changes)
 
                 measuring = self.data_manager.ask('get_measuring')
                 if not measuring:
@@ -499,12 +499,12 @@ class DataSet(DelegateAttributes):
         Find changes since the last sync of this DataSet.
 
         Args:
-            synced_indices (dict): ``{array_id: synced_index}`` where
+            synced_indices (dict): ``{name: synced_index}`` where
                 synced_index is the last flat index which has already
                 been synced, for any (usually all) arrays in the DataSet.
 
         Returns:
-            Dict[dict]: keys are ``array_id`` for each array with changes,
+            Dict[dict]: keys are ``name`` for each array with changes,
                 values are dicts as returned by ``DataArray.get_changes``
                 and required as kwargs to ``DataArray.apply_changes``.
                 Note that not all arrays in ``synced_indices`` need be
@@ -512,10 +512,10 @@ class DataSet(DelegateAttributes):
         """
         changes = {}
 
-        for array_id, synced_index in synced_indices.items():
-            array_changes = self.arrays[array_id].get_changes(synced_index)
+        for name, synced_index in synced_indices.items():
+            array_changes = self.arrays[name].get_changes(synced_index)
             if array_changes:
-                changes[array_id] = array_changes
+                changes[name] = array_changes
 
         return changes
 
@@ -525,7 +525,7 @@ class DataSet(DelegateAttributes):
 
         Note: DO NOT just set ``data_set.arrays[id] = data_array``, because
         this will not check if we are overwriting another array, nor set the
-        reference back to this DataSet, nor that the ``array_id`` in the array
+        reference back to this DataSet, nor that the ``name`` in the array
         matches how you're storing it here.
 
         Args:
@@ -536,7 +536,7 @@ class DataSet(DelegateAttributes):
         """
         # TODO: mask self.arrays so you *can't* set it directly?
         if data_array.name in self.arrays:
-            raise ValueError('array_id {} already exists in this '
+            raise ValueError('name {} already exists in this '
                              'DataSet'.format(data_array.name))
         self.arrays[data_array.name] = data_array
 
@@ -566,8 +566,8 @@ class DataSet(DelegateAttributes):
         elif self.mode == DataMode.LOCAL:
             # You will always end up in this block, either in the copy
             # on the server (if you hit the if statement above) or else here
-            for array_id, value in ids_values.items():
-                self.arrays[array_id][loop_indices] = value
+            for name, value in ids_values.items():
+                self.arrays[name][loop_indices] = value
             self.last_store = time.time()
             if (self.write_period is not None and
                     time.time() > self.last_write + self.write_period):
@@ -640,9 +640,9 @@ class DataSet(DelegateAttributes):
 
         lsi_cache = {}
         mr_cache = {}
-        for array_id, array in self.arrays.items():
-            lsi_cache[array_id] = array.last_saved_index
-            mr_cache[array_id] = array.modified_range
+        for name, array in self.arrays.items():
+            lsi_cache[name] = array.last_saved_index
+            mr_cache[name] = array.modified_range
             # array.clear_save() is not enough, we _need_ to set modified_range
             # TODO - identify *when* clear_save is not enough, and fix it
             # so we *can* use it. That said, maybe we will *still* want to
@@ -657,9 +657,9 @@ class DataSet(DelegateAttributes):
             self.formatter.write_metadata(self, io_manager, location,
                                           read_first=False)
         finally:
-            for array_id, array in self.arrays.items():
-                array.last_saved_index = lsi_cache[array_id]
-                array.modified_range = mr_cache[array_id]
+            for name, array in self.arrays.items():
+                array.last_saved_index = lsi_cache[name]
+                array.modified_range = mr_cache[name]
 
     def add_metadata(self, new_metadata):
         """
@@ -703,8 +703,8 @@ class DataSet(DelegateAttributes):
     def snapshot(self, update=False):
         """JSON state of the DataSet."""
         array_snaps = {}
-        for array_id, array in self.arrays.items():
-            array_snaps[array_id] = array.snapshot(update=update)
+        for name, array in self.arrays.items():
+            array_snaps[name] = array.snapshot(update=update)
 
         self.metadata.update({
             '__class__': full_class(self),
@@ -715,18 +715,18 @@ class DataSet(DelegateAttributes):
         })
         return deepcopy(self.metadata)
 
-    def get_array_metadata(self, array_id):
+    def get_array_metadata(self, name):
         """
         Get the metadata for a single contained DataArray.
 
         Args:
-            array_id (str): the array to get metadata for.
+            name (str): the array to get metadata for.
 
         Returns:
             dict: metadata for this array.
         """
         try:
-            return self.metadata['arrays'][array_id]
+            return self.metadata['arrays'][name]
         except (AttributeError, KeyError):
             return None
 
@@ -740,16 +740,16 @@ class DataSet(DelegateAttributes):
         for var, val in attrs:
             out += attr_template.format(var, val)
 
-        arr_info = [['<Type>', '<array_id>', '<array.name>', '<array.shape>']]
+        arr_info = [['<Type>', '<name>', '<array.name>', '<array.shape>']]
 
         id_items = self.arrays.keys()
 
-        for array_id in id_items:
-            array = self.arrays[array_id]
+        for name in id_items:
+            array = self.arrays[name]
             setp = 'Setpoint' if array.is_setpoint else 'Measured'
             name = array.name or 'None'
-            array_id = array_id or 'None'
-            arr_info.append([setp, array_id, name, repr(array.shape)])
+            name = name or 'None'
+            arr_info.append([setp, name, name, repr(array.shape)])
 
         column_lengths = [max(len(row[i]) for row in arr_info)
                           for i in range(len(arr_info[0]))]

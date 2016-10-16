@@ -499,7 +499,7 @@ class TestDataSet(TestCase):
         data.init_on_server()
         self.assertEqual(data.noise.ready, True)
 
-        # we can only add a given array_id once
+        # we can only add a given name once
         with self.assertRaises(ValueError):
             data.add_array(MockArray())
 

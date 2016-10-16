@@ -34,7 +34,7 @@ class Formatter:
         io: an IO manager (see qcodes.data.io)
         location: a string, like a file path, that identifies the DataSet and
             tells the IO manager where to store it
-        arrays: a dict of ``{array_id:DataArray}`` to read into.
+        arrays: a dict of ``{name:DataArray}`` to read into.
             - read will create entries that don't yet exist.
             - write will write ALL DataArrays in the DataSet, using
               last_saved_index and modified_range, as well as whether or not
@@ -71,7 +71,7 @@ class Formatter:
         Args:
             data_set (DataSet): the data to read into. Should already have
                 attributes ``io`` (an io manager), ``location`` (string),
-                and ``arrays`` (dict of ``{array_id: array}``, can be empty
+                and ``arrays`` (dict of ``{name: array}``, can be empty
                 or can already have some or all of the arrays present, they
                 expect to be overwritten)
         """
@@ -139,14 +139,14 @@ class Formatter:
             f (file-like): a file-like object to read from, as provided by
                 ``io_manager.open``.
 
-            ids_read (set): ``array_id``s that we have already read.
+            ids_read (set): ``name``s that we have already read.
                 When you read an array, check that it's not in this set (except
                 setpoints, which can be in several files with different inner
                 loops) then add it to the set so other files know it should not
                 be read again.
 
         Raises:
-            ValueError: if a duplicate array_id of measured data is found
+            ValueError: if a duplicate name of measured data is found
         """
         raise NotImplementedError
 
