@@ -915,11 +915,9 @@ class ActiveLoop(Metadatable):
         signal_queue: queue to communicate with main process directly
         ignore_kwargs: for compatibility with other loop tasks
         """
-        # JMN first change
         # at the beginning of the loop, the time to wait after setting
         # the loop parameter may be increased if an outer loop requested longer
         delay = max(self.delay, first_delay)
-
         callables = self._compile_actions(self.actions, action_indices)
 
         t0 = time.time()
@@ -957,16 +955,22 @@ class ActiveLoop(Metadatable):
                 # only wait the delay time if an inner loop will not inherit it
                 self._wait(delay)
 
+            # JMN: the below try block is where data is collected. It gets put
+            # into self.data_set by the _Measure action in callables. 
+            # Any function in callables inspecting the data will need to look 
+            # at this. But how does it know what the last data point was?
             try:
                 for f in callables:
                     f(first_delay=delay,
-                      loop_indices=new_indices,
-                      current_values=new_values)
+                         loop_indices=new_indices,
+                         current_values=new_values)
 
                     # after the first action, no delay is inherited
                     delay = 0
+                        
             except _QcodesBreak:
                 break
+            
 
             # after the first setpoint, delay reverts to the loop delay
             delay = self.delay

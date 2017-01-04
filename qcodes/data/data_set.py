@@ -748,7 +748,7 @@ class DataSet(DelegateAttributes):
         lsi_cache = {}
         mr_cache = {}
         for array_id, array in self.arrays.items():
-            lsi_cache[array_id] = array.last_saved_index
+            lsi_cache[array_id] = array.se_saved_index
             mr_cache[array_id] = array.modified_range
             # array.clear_save() is not enough, we _need_ to set modified_range
             # TODO - identify *when* clear_save is not enough, and fix it

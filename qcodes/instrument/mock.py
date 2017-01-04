@@ -128,7 +128,9 @@ class MockInstrument(Instrument):
             self.history.append((datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                                  'write', parameter, value))
 
-        self._model.write('cmd', self.name + ':' + cmd)
+        #self._model.write('cmd', self.name + ':' + cmd)
+        return self._model.handle_cmd(self.name + ':' + cmd)
+
 
     def ask_raw(self, cmd):
         """
@@ -158,7 +160,11 @@ class MockInstrument(Instrument):
             self.history.append((datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                                  'ask', parameter))
 
-        return self._model.ask('cmd', self.name + ':' + cmd)
+        #JMN. comment out below and added next line. Why was it ask in the
+        #first place?
+        #return self._model.ask('cmd', self.name + ':' + cmd)
+        return self._model.handle_cmd(self.name + ':' + cmd)
+
 
 
 # MockModel is purely in service of mock instruments which *are* tested

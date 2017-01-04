@@ -223,7 +223,9 @@ class Instrument(Metadatable, DelegateAttributes, NestedAttrAccess,
         # making sure its name is unique
         existing_wr = cls._all_instruments.get(name)
         if existing_wr and existing_wr():
-            raise KeyError('Another instrument has the name: {}'.format(name))
+            #JMN
+            #raise KeyError('Another instrument has the name: {}'.format(name))
+            print("Overwriting instruments...")
 
         cls._all_instruments[name] = wr
 

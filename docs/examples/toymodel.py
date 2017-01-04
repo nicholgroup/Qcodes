@@ -151,7 +151,6 @@ class AverageAndRaw(Parameter):
 class ArrayGetter(Parameter):
     """
     Example parameter that just returns a single array
-
     TODO: in theory you can make this same Parameter with
     name, label & shape (instead of names, labels & shapes) and altered
     setpoints (not wrapped in an extra tuple) and this mostly works,
