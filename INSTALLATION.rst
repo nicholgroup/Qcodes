@@ -28,18 +28,22 @@ To install qcodes from the repository:
 8. Navigate again with the terminal (or drag and drop the the folder on OsX)
 
 9. Open a python terminal. To install matplotlib and pyqtgraph, type
+
 .. code:: bash
 
 	conda install matplotlib
 	conda install pyqtgraph
 
-10. You may need to update setuptools. Download the python file ez_setup.py. In the termianl, navigate to the directory. The run
+10. You may need to update setuptools. Download the python file ez_setup.py. In the terminal, navigate to the directory. The run
 
-.. code: : bash
+.. code:: bash
+
 	python ez_setup.py install
 
 11. Navigate back to the repository directory, and install all of the packages with 
+
 .. code:: bash
+
 	pip install -e . 
 
 It may ask you to install visual c++ install tools, which you should.
