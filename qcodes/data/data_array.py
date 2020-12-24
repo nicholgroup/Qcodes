@@ -1,7 +1,7 @@
 import numpy as np
 import collections
 
-from qcodes.utils.helpers import DelegateAttributes, full_class
+from qcodes.utils.helpers import DelegateAttributes, full_class, warn_units
 
 
 class DataArray(DelegateAttributes):
@@ -29,7 +29,7 @@ class DataArray(DelegateAttributes):
     Args:
         parameter (Optional[Parameter]): The parameter whose values will
             populate this array, if any. Will copy ``name``, ``full_name``,
-            ``label``, ``units``, and ``snapshot`` from here unless you
+            ``label``, ``unit``, and ``snapshot`` from here unless you
             provide them explicitly.
 
         name (Optional[str]): The short name of this array.
@@ -68,12 +68,14 @@ class DataArray(DelegateAttributes):
             handle converting this to array_id internally (maybe it
             already does?)
 
-        units (Optional[str]): The units of the values stored in this array.
+        unit (Optional[str]): The unit of the values stored in this array.
+
+        units (Optional[str]): DEPRECATED, redirects to ``unit``.
 
         is_setpoint (bool): True if this is a setpoint array, False if it
             is measured. Default False.
 
-        preset_data (Optional[Union[ndarray, sequence]]): Contents of the
+        preset_data (Optional[Union[numpy.ndarray, Sequence]]): Contents of the
             array, if already known (for example if this is a setpoint
             array). ``shape`` will be inferred from this array instead of
             from the ``shape`` argument.
@@ -84,7 +86,7 @@ class DataArray(DelegateAttributes):
         'array_id',
         'name',
         'shape',
-        'units',
+        'unit',
         'label',
         'action_indices',
         'is_setpoint')
@@ -94,7 +96,7 @@ class DataArray(DelegateAttributes):
     COPY_ATTRS_FROM_INPUT = (
         'name',
         'label',
-        'units')
+        'unit')
 
     # keys in the parameter snapshot to omit from our snapshot
     SNAP_OMIT_KEYS = (
@@ -108,13 +110,17 @@ class DataArray(DelegateAttributes):
 
     def __init__(self, parameter=None, name=None, full_name=None, label=None,
                  snapshot=None, array_id=None, set_arrays=(), shape=None,
-                 action_indices=(), units=None, is_setpoint=False,
+                 action_indices=(), unit=None, units=None, is_setpoint=False,
                  preset_data=None):
         self.name = name
         self.full_name = full_name or name
         self.label = label
         self.shape = shape
-        self.units = units
+        if units is not None:
+            warn_units('DataArray', self)
+            if unit is None:
+                unit = units
+        self.unit = unit
         self.array_id = array_id
         self.is_setpoint = is_setpoint
         self.action_indices = action_indices
@@ -251,7 +257,7 @@ class DataArray(DelegateAttributes):
         TODO: per above, perhaps remove this distinction entirely?
 
         Args:
-            data (Optional[Union[ndarray, sequence]]): If provided,
+            data (Optional[Union[numpy.ndarray, Sequence]]): If provided,
                 we fill the array with this data. Otherwise the new
                 array will be filled with NaN.
 
@@ -262,7 +268,7 @@ class DataArray(DelegateAttributes):
         """
         if data is not None:
             if not isinstance(data, np.ndarray):
-                if isinstance(data, collections.Iterator):
+                if isinstance(data, collections.abc.Iterator):
                     # faster than np.array(tuple(data)) (or via list)
                     # but requires us to assume float
                     data = np.fromiter(data, float)
@@ -314,7 +320,7 @@ class DataArray(DelegateAttributes):
         Also update the record of modifications to the array. If you don't
         want this overhead, you can access ``self.ndarray`` directly.
         """
-        if isinstance(loop_indices, collections.Iterable):
+        if isinstance(loop_indices, collections.abc.Iterable):
             min_indices = list(loop_indices)
             max_indices = list(loop_indices)
         else:
@@ -356,9 +362,9 @@ class DataArray(DelegateAttributes):
         looping over the indices from inner to outer.
 
         Args:
-            indices (sequence): indices of an element or slice of this array.
+            indices (Sequence): indices of an element or slice of this array.
 
-            index_fill (sequence, optional): extra indices to use if
+            index_fill (Optional[Sequence]): extra indices to use if
                 ``indices`` has less dimensions than the array, ie it points
                 to a slice rather than a single element. Use zeros to get the
                 beginning of this slice, and [d - 1 for d in shape] to get the
@@ -480,7 +486,7 @@ class DataArray(DelegateAttributes):
         self.synced_index = stop
 
     def __repr__(self):
-        array_id_or_none = ' {}'.format(self.array_id) if self.array_id else ''
+        array_id_or_none = f' {self.array_id}' if self.array_id else ''
         return '{}[{}]:{}\n{}'.format(self.__class__.__name__,
                                       ','.join(map(str, self.shape)),
                                       array_id_or_none, repr(self.ndarray))
@@ -518,3 +524,8 @@ class DataArray(DelegateAttributes):
             last_index = max(last_index, self.synced_index)
 
         return (last_index + 1) / self.ndarray.size
+
+    @property
+    def units(self):
+        warn_units('DataArray', self)
+        return self.unit

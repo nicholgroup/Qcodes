@@ -1,207 +1,21 @@
-import time
+from functools import partial
+import logging
+from typing import Any, Sequence, Dict, Optional
+
 import numpy as np
 
-from qcodes.instrument.base import Instrument
-from qcodes.instrument.mock import MockInstrument, MockModel
-from qcodes.utils.validators import Numbers
-from qcodes.instrument.parameter import Parameter, ManualParameter
+from qcodes.instrument.base import Instrument, InstrumentBase
+from qcodes.utils.validators import Numbers, Arrays, Strings, ComplexNumbers
+from qcodes.instrument.parameter import MultiParameter, Parameter, \
+    ArrayParameter, ParameterWithSetpoints
+from qcodes.instrument.channel import InstrumentChannel, ChannelList
+import random
 
-
-class AMockModel(MockModel):
-
-    def __init__(self):
-        self._memory = {}
-        self._reset()
-        super().__init__()
-
-    def _reset(self):
-        self._gates = [0.0, 0.0, 0.0]
-        self._excitation = 0.1
-
-    @staticmethod
-    def fmt(value):
-        return '{:.3f}'.format(value)
-
-    def gates_set(self, parameter, value):
-        if parameter[0] == 'c':
-            self._gates[int(parameter[1:])] = float(value)
-        elif parameter == 'rst' and value is None:
-            # resets gates AND excitation, so we can use gates.reset() to
-            # reset the entire model
-            self._reset()
-        elif parameter[:3] == 'mem':
-            slot = int(parameter[3:])
-            self._memory[slot] = value
-        else:
-            raise ValueError
-
-    def gates_get(self, parameter):
-        if parameter[0] == 'c':
-            return self.fmt(self._gates[int(parameter[1:])])
-        elif parameter[:3] == 'mem':
-            slot = int(parameter[3:])
-            return self._memory[slot]
-        else:
-            raise ValueError
-
-    def source_set(self, parameter, value):
-        if parameter == 'ampl':
-            try:
-                self._excitation = float(value)
-            except ValueError:
-                # "Off" as in the MultiType sweep step test
-                self._excitation = None
-        else:
-            raise ValueError(parameter, value)
-
-    def source_get(self, parameter):
-        if parameter == 'ampl':
-            return self.fmt(self._excitation)
-        # put mem here too, just so we can be 100% sure it's going through
-        # the model
-        elif parameter[:3] == 'mem':
-            slot = int(parameter[3:])
-            return self._memory[slot]
-        else:
-            raise ValueError
-
-    def meter_get(self, parameter):
-        if parameter == 'ampl':
-            gates = self._gates
-            # here's my super complex model output!
-            return self.fmt(self._excitation *
-                            (gates[0] + gates[1]**2 + gates[2]**3))
-        elif parameter[:5] == 'echo ':
-            return self.fmt(float(parameter[5:]))
-
-    # alias because we need new names when we instantiate an instrument
-    # locally at the same time as remotely
-    def gateslocal_set(self, parameter, value):
-        return self.gates_set(parameter, value)
-
-    def gateslocal_get(self, parameter):
-        return self.gates_get(parameter)
-
-    def sourcelocal_set(self, parameter, value):
-        return self.source_set(parameter, value)
-
-    def sourcelocal_get(self, parameter):
-        return self.source_get(parameter)
-
-    def meterlocal_get(self, parameter):
-        return self.meter_get(parameter)
-
-
-class ParamNoDoc:
-
-    def __init__(self, name, *args, **kwargs):
-        self.name = name
-
-    def get_attrs(self):
-        return []
-
-
-class MockInstTester(MockInstrument):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.attach_adder()
-
-    def attach_adder(self):
-        """
-        this function attaches a closure to the object, so can only be
-        executed after creating the server because a closure is not
-        picklable
-        """
-        a = 5
-
-        def f(b):
-            """
-            not the same function as the original method
-            """
-            return a + b
-        self.add5 = f
-
-    def add5(self, b):
-        """
-        The class copy of this should not get run, because it should
-        be overwritten on the server by the closure version.
-        """
-        raise RuntimeError('dont run this one!')
-
-
-class MockGates(MockInstTester):
-
-    def __init__(self, name='gates', model=None, **kwargs):
-        super().__init__(name, model=model, delay=0.001, **kwargs)
-
-        for i in range(3):
-            cmdbase = 'c{}'.format(i)
-            self.add_parameter('chan{}'.format(i), get_cmd=cmdbase + '?',
-                               set_cmd=cmdbase + ':{:.4f}',
-                               get_parser=float,
-                               vals=Numbers(-10, 10))
-            self.add_parameter('chan{}step'.format(i),
-                               get_cmd=cmdbase + '?',
-                               set_cmd=cmdbase + ':{:.4f}',
-                               get_parser=float,
-                               vals=Numbers(-10, 10),
-                               step=0.1, delay=0.005)
-
-        self.add_parameter('chan0slow', get_cmd='c0?',
-                           set_cmd=self.slow_neg_set, get_parser=float,
-                           vals=Numbers(-10, 10), step=0.2,
-                           delay=0.02)
-        self.add_parameter('chan0slow2', get_cmd='c0?',
-                           set_cmd=self.slow_neg_set, get_parser=float,
-                           vals=Numbers(-10, 10), step=0.2,
-                           delay=0.01, max_delay=0.02)
-        self.add_parameter('chan0slow3', get_cmd='c0?',
-                           set_cmd=self.slow_neg_set, get_parser=float,
-                           vals=Numbers(-10, 10), step=0.2,
-                           delay=0.01, max_delay=0.08)
-        self.add_parameter('chan0slow4', get_cmd='c0?',
-                           set_cmd=self.slow_neg_set, get_parser=float,
-                           vals=Numbers(-10, 10),
-                           delay=0.01, max_delay=0.02)
-        self.add_parameter('chan0slow5', get_cmd='c0?',
-                           set_cmd=self.slow_neg_set, get_parser=float,
-                           vals=Numbers(-10, 10),
-                           delay=0.01, max_delay=0.08)
-
-        self.add_function('reset', call_cmd='rst')
-
-        self.add_parameter('foo', parameter_class=ParamNoDoc)
-
-    def slow_neg_set(self, val):
-        if val < 0:
-            time.sleep(0.05)
-        self.chan0.set(val)
-
-
-class MockSource(MockInstTester):
-
-    def __init__(self, name='source', model=None, **kwargs):
-        super().__init__(name, model=model, delay=0.001, **kwargs)
-
-        self.add_parameter('amplitude', get_cmd='ampl?',
-                           set_cmd='ampl:{:.4f}', get_parser=float,
-                           vals=Numbers(0, 1),
-                           step=0.2, delay=0.005)
-
-
-class MockMeter(MockInstTester):
-
-    def __init__(self, name='meter', model=None, **kwargs):
-        super().__init__(name, model=model, delay=0.001, **kwargs)
-
-        self.add_parameter('amplitude', get_cmd='ampl?', get_parser=float)
-        self.add_function('echo', call_cmd='echo {:.2f}?',
-                          args=[Numbers(0, 1000)], return_parser=float)
+log = logging.getLogger(__name__)
 
 
 class MockParabola(Instrument):
-    '''
+    """
     Holds dummy parameters which are get and set able as well as provides
     some basic functions that depends on these parameters for testing
     purposes.
@@ -212,25 +26,27 @@ class MockParabola(Instrument):
     It has 3 main parameters (x, y, z) in order to allow for testing of 3D
     sweeps. The function (parabola with optional noise) is chosen to allow
     testing of numerical optimizations.
-    '''
+    """
 
     def __init__(self, name, **kw):
         super().__init__(name, **kw)
 
         # Instrument parameters
         for parname in ['x', 'y', 'z']:
-            self.add_parameter(parname, units='a.u.',
-                               parameter_class=ManualParameter,
-                               vals=Numbers(), initial_value=0)
+            self.add_parameter(parname, unit='a.u.',
+                               parameter_class=Parameter,
+                               vals=Numbers(), initial_value=0,
+                               get_cmd=None, set_cmd=None)
 
-        self.add_parameter('noise', units='a.u.',
+        self.add_parameter('noise', unit='a.u.',
                            label='white noise amplitude',
-                           parameter_class=ManualParameter,
-                           vals=Numbers(), initial_value=0)
+                           parameter_class=Parameter,
+                           vals=Numbers(), initial_value=0,
+                           get_cmd=None, set_cmd=None)
 
-        self.add_parameter('parabola', units='a.u.',
+        self.add_parameter('parabola', unit='a.u.',
                            get_cmd=self._measure_parabola)
-        self.add_parameter('skewed_parabola', units='a.u.',
+        self.add_parameter('skewed_parabola', unit='a.u.',
                            get_cmd=self._measure_skewed_parabola)
 
     def _measure_parabola(self):
@@ -238,35 +54,42 @@ class MockParabola(Instrument):
                 self.noise.get()*np.random.rand(1))
 
     def _measure_skewed_parabola(self):
-        '''
+        """
         Adds an -x term to add a corelation between the parameters.
-        '''
+        """
         return ((self.x.get()**2 + self.y.get()**2 +
-                self.z.get()**2)*(1 + abs(self.y.get()-self.x.get())) +
-                self.noise.get()*np.random.rand(1))
+                 self.z.get()**2)*(1 + abs(self.y.get()-self.x.get())) +
+                 self.noise.get()*np.random.rand(1))
 
 
-class MockMetaParabola(Instrument):
-    '''
+class MockMetaParabola(InstrumentBase):
+    """
     Test for a meta instrument, has a tunable gain knob
-    '''
-    shared_kwargs = ['mock_parabola_inst']
+
+    Unlike a MockParabola, a MockMetaParabola does not have a connection, or
+    access to ask_raw/write_raw, i.e. it would not be connected to a real instrument.
+
+    It is also not tracked in the global _all_instruments list, but is still
+    snapshottable in a station.
+    """
 
     def __init__(self, name, mock_parabola_inst, **kw):
+        """
+        Create a new MockMetaParabola, connected to an existing MockParabola instance.
+        """
         super().__init__(name, **kw)
         self.mock_parabola_inst = mock_parabola_inst
 
         # Instrument parameters
         for parname in ['x', 'y', 'z']:
-            self.add_parameter(parname, units='a.u.',
-                               parameter_class=ManualParameter,
-                               vals=Numbers(), initial_value=0)
-        self.add_parameter('gain', parameter_class=ManualParameter,
-                           initial_value=1)
+            self.parameters[parname] = getattr(mock_parabola_inst, parname)
+        self.add_parameter('gain', parameter_class=Parameter,
+                           initial_value=1,
+                           get_cmd=None, set_cmd=None)
 
-        self.add_parameter('parabola', units='a.u.',
+        self.add_parameter('parabola', unit='a.u.',
                            get_cmd=self._get_parabola)
-        self.add_parameter('skewed_parabola', units='a.u.',
+        self.add_parameter('skewed_parabola', unit='a.u.',
                            get_cmd=self._get_skew_parabola)
 
     def _get_parabola(self):
@@ -280,14 +103,15 @@ class MockMetaParabola(Instrument):
 
 class DummyInstrument(Instrument):
 
-    def __init__(self, name='dummy', gates=['dac1', 'dac2', 'dac3'], **kwargs):
+    def __init__(self, name: str = 'dummy',
+                 gates: Sequence[str] = ('dac1', 'dac2', 'dac3'), **kwargs):
 
         """
         Create a dummy instrument that can be used for testing
 
         Args:
-            name (string): name for the instrument
-            gates (list): list of names that is used to create parameters for
+            name: name for the instrument
+            gates: list of names that is used to create parameters for
                             the instrument
         """
         super().__init__(name, **kwargs)
@@ -295,33 +119,582 @@ class DummyInstrument(Instrument):
         # make gates
         for _, g in enumerate(gates):
             self.add_parameter(g,
-                               parameter_class=ManualParameter,
+                               parameter_class=Parameter,
                                initial_value=0,
-                               label='Gate {} (arb. units)'.format(g),
-                               vals=Numbers(-800, 400))
+                               label=f'Gate {g}',
+                               unit="V",
+                               vals=Numbers(-800, 400),
+                               get_cmd=None, set_cmd=None)
 
 
-class MultiGetter(Parameter):
+class DmmExponentialParameter(Parameter):
+    def __init__(self, name, **kwargs):
+        super().__init__(name, **kwargs)
+        self._ed = self._exponential_decay(5, 0.2)
+        next(self._ed)
+
+    def get_raw(self):
+        """
+        This method is automatically wrapped to
+        provide a ``get`` method on the parameter instance.
+        """
+        dac = self.root_instrument._setter_instr
+        val = self._ed.send(dac.ch1())
+        next(self._ed)
+        return val
+
+    @staticmethod
+    def _exponential_decay(a: float, b: float):
+        """
+        Yields a*exp(-b*x) where x is put in
+        """
+        x = 0
+        while True:
+            x = yield
+            yield a * np.exp(-b * x) + 0.02 * a * np.random.randn()
+
+
+class DmmGaussParameter(Parameter):
+    def __init__(self, name, **kwargs):
+        super().__init__(name, **kwargs)
+        self.x0 = 0.1
+        self.y0 = 0.2
+        self.sigma = 0.25
+        self.noise: float = 0.0005
+        self._gauss = self._gauss_model()
+        next(self._gauss)
+
+    def get_raw(self):
+        """
+        This method is automatically wrapped to
+        provide a ``get`` method on the parameter instance.
+        """
+        dac = self.root_instrument._setter_instr
+        val = self._gauss.send((dac.ch1.get(), dac.ch2.get()))
+        next(self._gauss)
+        return val
+
+    def _gauss_model(self):
+        """
+        Returns a generator sampling a gaussian. The gaussian is
+        normalised such that its maximal value is simply 1
+        """
+        while True:
+            (x, y) = yield
+            model = np.exp(-((self.x0-x)**2+(self.y0-y)**2)/2/self.sigma**2)*np.exp(2*self.sigma**2)
+            noise = np.random.randn()*self.noise
+            yield model + noise
+
+
+class DummyInstrumentWithMeasurement(Instrument):
+
+    def __init__(
+            self,
+            name: str,
+            setter_instr: DummyInstrument,
+            **kwargs):
+        super().__init__(name=name, **kwargs)
+        self._setter_instr = setter_instr
+        self.add_parameter('v1',
+                           parameter_class=DmmExponentialParameter,
+                           initial_value=0,
+                           label='Gate v1',
+                           unit="V",
+                           vals=Numbers(-800, 400),
+                           get_cmd=None, set_cmd=None)
+        self.add_parameter('v2',
+                           parameter_class=DmmGaussParameter,
+                           initial_value=0,
+                           label='Gate v2',
+                           unit="V",
+                           vals=Numbers(-800, 400),
+                           get_cmd=None, set_cmd=None)
+
+
+class DummyChannel(InstrumentChannel):
+    """
+    A single dummy channel implementation
+    """
+
+    def __init__(self, parent, name, channel):
+        super().__init__(parent, name)
+
+        self._channel = channel
+
+        # Add the various channel parameters
+        self.add_parameter('temperature',
+                           parameter_class=Parameter,
+                           initial_value=0,
+                           label=f"Temperature_{channel}",
+                           unit='K',
+                           vals=Numbers(0, 300),
+                           get_cmd=None, set_cmd=None)
+
+        self.add_parameter(name='dummy_multi_parameter',
+                           parameter_class=MultiSetPointParam)
+
+        self.add_parameter(name='dummy_scalar_multi_parameter',
+                           parameter_class=MultiScalarParam)
+
+        self.add_parameter(name='dummy_2d_multi_parameter',
+                           parameter_class=Multi2DSetPointParam)
+
+        self.add_parameter(name='dummy_2d_multi_parameter_2',
+                           parameter_class=Multi2DSetPointParam2Sizes)
+
+        self.add_parameter(name='dummy_array_parameter',
+                           parameter_class=ArraySetPointParam)
+
+        self.add_parameter(name='dummy_complex_array_parameter',
+                           parameter_class=ComplexArraySetPointParam)
+
+        self.add_parameter('dummy_start',
+                           initial_value=0,
+                           unit='some unit',
+                           label='f start',
+                           vals=Numbers(0, 1e3),
+                           get_cmd=None,
+                           set_cmd=None)
+
+        self.add_parameter('dummy_stop',
+                           unit='some unit',
+                           label='f stop',
+                           vals=Numbers(1, 1e3),
+                           get_cmd=None,
+                           set_cmd=None)
+
+        self.add_parameter('dummy_n_points',
+                           unit='',
+                           vals=Numbers(1, 1e3),
+                           get_cmd=None,
+                           set_cmd=None)
+
+        self.add_parameter('dummy_start_2',
+                           initial_value=0,
+                           unit='some unit',
+                           label='f start',
+                           vals=Numbers(0, 1e3),
+                           get_cmd=None,
+                           set_cmd=None)
+
+        self.add_parameter('dummy_stop_2',
+                           unit='some unit',
+                           label='f stop',
+                           vals=Numbers(1, 1e3),
+                           get_cmd=None,
+                           set_cmd=None)
+
+        self.add_parameter('dummy_n_points_2',
+                           unit='',
+                           vals=Numbers(1, 1e3),
+                           get_cmd=None,
+                           set_cmd=None)
+
+        self.add_parameter('dummy_sp_axis',
+                           unit='some unit',
+                           label='Dummy sp axis',
+                           parameter_class=GeneratedSetPoints,
+                           startparam=self.dummy_start,
+                           stopparam=self.dummy_stop,
+                           numpointsparam=self.dummy_n_points,
+                           vals=Arrays(shape=(self.dummy_n_points,)))
+
+        self.add_parameter('dummy_sp_axis_2',
+                           unit='some unit',
+                           label='Dummy sp axis',
+                           parameter_class=GeneratedSetPoints,
+                           startparam=self.dummy_start_2,
+                           stopparam=self.dummy_stop_2,
+                           numpointsparam=self.dummy_n_points_2,
+                           vals=Arrays(shape=(self.dummy_n_points_2,)))
+
+        self.add_parameter(name='dummy_parameter_with_setpoints',
+                           label='Dummy Parameter with Setpoints',
+                           unit='some other unit',
+                           setpoints=(self.dummy_sp_axis,),
+                           vals=Arrays(shape=(self.dummy_n_points,)),
+                           parameter_class=DummyParameterWithSetpoints1D)
+
+        self.add_parameter(name='dummy_parameter_with_setpoints_2d',
+                           label='Dummy Parameter with Setpoints',
+                           unit='some other unit',
+                           setpoints=(self.dummy_sp_axis,self.dummy_sp_axis_2),
+                           vals=Arrays(shape=(self.dummy_n_points,self.dummy_n_points_2)),
+                           parameter_class=DummyParameterWithSetpoints2D)
+
+        self.add_parameter(name='dummy_text',
+                           label='Dummy text',
+                           unit='text unit',
+                           initial_value='thisisastring',
+                           set_cmd=None,
+                           vals=Strings())
+
+        self.add_parameter(name='dummy_complex',
+                           label='Dummy complex',
+                           unit='complex unit',
+                           initial_value=1+1j,
+                           set_cmd=None,
+                           vals=ComplexNumbers())
+
+        self.add_parameter(name='dummy_parameter_with_setpoints_complex',
+                           label='Dummy Parameter with Setpoints complex',
+                           unit='some other unit',
+                           setpoints=(self.dummy_sp_axis,),
+                           vals=Arrays(shape=(self.dummy_n_points,),
+                                       valid_types=(np.complexfloating,)),
+                           parameter_class=DummyParameterWithSetpointsComplex)
+
+        self.add_function(name='log_my_name',
+                          call_cmd=partial(log.debug, f'{name}'))
+
+
+class DummyChannelInstrument(Instrument):
+    """
+    Dummy instrument with channels
+    """
+
+    def __init__(self, name, **kwargs):
+        super().__init__(name, **kwargs)
+
+        channels = ChannelList(self, "TempSensors", DummyChannel, snapshotable=False)
+        for chan_name in ('A', 'B', 'C', 'D', 'E', 'F'):
+            channel = DummyChannel(self, f'Chan{chan_name}', chan_name)
+            channels.append(channel)
+            self.add_submodule(chan_name, channel)
+        self.add_submodule("channels", channels)
+
+
+class MultiGetter(MultiParameter):
     """
     Test parameters with complicated return values
-    instantiate with kwargs:
+    instantiate with kwargs::
+
         MultiGetter(name1=return_val1, name2=return_val2)
+
     to set the names and (constant) return values of the
     pieces returned. Each return_val can be any array-like
     object
-    eg:
+    eg::
+
         MultiGetter(one=1, onetwo=(1, 2))
+
     """
     def __init__(self, **kwargs):
-        if len(kwargs) == 1:
-            name, self._return = list(kwargs.items())[0]
-            super().__init__(name=name)
-            self.shape = np.shape(self._return)
-        else:
-            names = tuple(sorted(kwargs.keys()))
-            super().__init__(names=names)
-            self._return = tuple(kwargs[k] for k in names)
-            self.shapes = tuple(np.shape(v) for v in self._return)
+        names = tuple(sorted(kwargs.keys()))
+        self._return = tuple(kwargs[k] for k in names)
+        shapes = tuple(np.shape(v) for v in self._return)
+        super().__init__(name='multigetter', names=names, shapes=shapes)
 
-    def get(self):
+    def get_raw(self):
         return self._return
+
+
+class MultiSetPointParam(MultiParameter):
+    """
+    Multiparameter which only purpose it to test that units, setpoints
+    and so on are copied correctly to the individual arrays in the datarray.
+    """
+    def __init__(self, instrument=None, name='multi_setpoint_param'):
+        shapes = ((5,), (5,))
+        names = ('multi_setpoint_param_this', 'multi_setpoint_param_that')
+        labels = ('this label', 'that label')
+        units = ('this unit', 'that unit')
+        sp_base = tuple(np.linspace(5, 9, 5))
+        setpoints = ((sp_base,), (sp_base,))
+        setpoint_names = (('multi_setpoint_param_this_setpoint',), ('multi_setpoint_param_this_setpoint',))
+        setpoint_labels = (('this setpoint',), ('this setpoint',))
+        setpoint_units = (('this setpointunit',), ('this setpointunit',))
+        super().__init__(name, names, shapes,
+                         instrument=instrument,
+                         labels=labels,
+                         units=units,
+                         setpoints=setpoints,
+                         setpoint_labels=setpoint_labels,
+                         setpoint_names=setpoint_names,
+                         setpoint_units=setpoint_units)
+
+    def get_raw(self):
+        items = (np.zeros(5), np.ones(5))
+        return items
+
+
+class Multi2DSetPointParam(MultiParameter):
+    """
+    Multiparameter which only purpose it to test that units, setpoints
+    and so on are copied correctly to the individual arrays in the datarray.
+    """
+
+    def __init__(self, instrument=None, name='multi_2d_setpoint_param'):
+        shapes = ((5, 3), (5, 3))
+        names = ('this', 'that')
+        labels = ('this label', 'that label')
+        units = ('this unit', 'that unit')
+        sp_base_1 = tuple(np.linspace(5, 9, 5))
+        sp_base_2 = tuple(np.linspace(9, 11, 3))
+        array_setpoints = setpoint_generator(sp_base_1, sp_base_2)
+        setpoints = (array_setpoints, array_setpoints)
+        setpoint_names = (('multi_2d_setpoint_param_this_setpoint', 'multi_2d_setpoint_param_that_setpoint'),
+                          ('multi_2d_setpoint_param_this_setpoint', 'multi_2d_setpoint_param_that_setpoint'))
+        setpoint_labels = (('this setpoint', 'that setpoint'),
+                           ('this setpoint', 'that setpoint'))
+        setpoint_units = (('this setpointunit',
+                           'that setpointunit'),
+                          ('this setpointunit',
+                           'that setpointunit'))
+        super().__init__(name, names, shapes,
+                         instrument=instrument,
+                         labels=labels,
+                         units=units,
+                         setpoints=setpoints,
+                         setpoint_labels=setpoint_labels,
+                         setpoint_names=setpoint_names,
+                         setpoint_units=setpoint_units)
+
+    def get_raw(self):
+        items = (np.zeros((5, 3)), np.ones((5, 3)))
+        return items
+
+
+
+class Multi2DSetPointParam2Sizes(MultiParameter):
+    """
+    Multiparameter for testing containing individual parameters with different
+    shapes.
+    """
+
+    def __init__(self, instrument=None, name='multi_2d_setpoint_param'):
+        shapes = ((5, 3), (2, 7))
+        names = ('this_5_3', 'this_2_7')
+        labels = ('this label', 'that label')
+        units = ('this unit', 'that unit')
+        sp_base_1_1 = tuple(np.linspace(5, 9, 5))
+        sp_base_2_1 = tuple(np.linspace(9, 11, 3))
+        array_setpoints_1 = setpoint_generator(sp_base_1_1, sp_base_2_1)
+        sp_base_1_2 = tuple(np.linspace(5, 9, 2))
+        sp_base_2_2 = tuple(np.linspace(9, 11, 7))
+        array_setpoints_2 = setpoint_generator(sp_base_1_2, sp_base_2_2)
+        setpoints = (array_setpoints_1, array_setpoints_2)
+        setpoint_names = (('multi_2d_setpoint_param_this_setpoint_1', 'multi_2d_setpoint_param_that_setpoint_1'),
+                          ('multi_2d_setpoint_param_this_setpoint_2', 'multi_2d_setpoint_param_that_setpoint_2'))
+        setpoint_labels = (('this setpoint 1', 'that setpoint 1'),
+                           ('this setpoint 2', 'that setpoint 2'))
+        setpoint_units = (('this setpointunit',
+                           'that setpointunit'),
+                          ('this setpointunit',
+                           'that setpointunit'))
+        super().__init__(name, names, shapes,
+                         instrument=instrument,
+                         labels=labels,
+                         units=units,
+                         setpoints=setpoints,
+                         setpoint_labels=setpoint_labels,
+                         setpoint_names=setpoint_names,
+                         setpoint_units=setpoint_units)
+
+    def get_raw(self):
+        items = (np.zeros((5, 3)), np.ones((2, 7)))
+        return items
+
+
+class MultiScalarParam(MultiParameter):
+    """
+    Multiparameter whos elements are scalars i.e. similar to
+    Parameter with no setpoints etc.
+    """
+    def __init__(self, instrument=None, name='multiscalarparameter'):
+        shapes = ((), ())
+        names = ('thisparam', 'thatparam')
+        labels = ('thisparam label', 'thatparam label')
+        units = ('thisparam unit', 'thatparam unit')
+        setpoints = ((), ())
+        super().__init__(name, names, shapes,
+                         instrument=instrument,
+                         labels=labels,
+                         units=units,
+                         setpoints=setpoints)
+
+    def get_raw(self):
+        items = (0, 1)
+        return items
+
+
+class ArraySetPointParam(ArrayParameter):
+    """
+    Arrayparameter which only purpose it to test that units, setpoints
+    and so on are copied correctly to the individual arrays in the datarray.
+    """
+
+    def __init__(self, instrument=None, name='array_setpoint_param'):
+        shape = (5,)
+        label = 'this label'
+        unit = 'this unit'
+        sp_base = tuple(np.linspace(5, 9, 5))
+        setpoints = (sp_base,)
+        setpoint_names = ('array_setpoint_param_this_setpoint',)
+        setpoint_labels = ('this setpoint',)
+        setpoint_units = ('this setpointunit',)
+        super().__init__(name,
+                         shape,
+                         instrument,
+                         label=label,
+                         unit=unit,
+                         setpoints=setpoints,
+                         setpoint_labels=setpoint_labels,
+                         setpoint_names=setpoint_names,
+                         setpoint_units=setpoint_units)
+
+    def get_raw(self):
+        item = np.ones(5) + 1
+        return item
+
+
+class ComplexArraySetPointParam(ArrayParameter):
+    """
+    Arrayparameter that returns complex numbers
+    """
+
+    def __init__(self, instrument=None, name='testparameter'):
+        shape = (5,)
+        label = 'this label'
+        unit = 'this unit'
+        sp_base = tuple(np.linspace(5, 9, 5))
+        setpoints = (sp_base,)
+        setpoint_names = ('this_setpoint',)
+        setpoint_labels = ('this setpoint',)
+        setpoint_units = ('this setpointunit',)
+        super().__init__(name,
+                         shape,
+                         instrument,
+                         label=label,
+                         unit=unit,
+                         setpoints=setpoints,
+                         setpoint_labels=setpoint_labels,
+                         setpoint_names=setpoint_names,
+                         setpoint_units=setpoint_units)
+
+    def get_raw(self):
+        item = np.arange(5) - 1j*np.arange(5)
+        return item
+
+
+class GeneratedSetPoints(Parameter):
+    """
+    A parameter that generates a setpoint array from start, stop and num points
+    parameters.
+    """
+    def __init__(self, startparam, stopparam, numpointsparam, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._startparam = startparam
+        self._stopparam = stopparam
+        self._numpointsparam = numpointsparam
+
+    def get_raw(self):
+        return np.linspace(self._startparam(), self._stopparam(),
+                              self._numpointsparam())
+
+
+class DummyParameterWithSetpoints1D(ParameterWithSetpoints):
+    """
+    Dummy parameter that returns data with a shape based on the
+    `dummy_n_points` parameter in the instrument.
+    """
+
+    def get_raw(self):
+        npoints = self.instrument.dummy_n_points()
+        return np.random.rand(npoints)
+
+
+class DummyParameterWithSetpoints2D(ParameterWithSetpoints):
+    """
+    Dummy parameter that returns data with a shape based on the
+    `dummy_n_points` and `dummy_n_points_2` parameters in the instrument.
+    """
+
+    def get_raw(self):
+        npoints = self.instrument.dummy_n_points()
+        npoints_2 = self.instrument.dummy_n_points_2()
+        return np.random.rand(npoints, npoints_2)
+
+
+
+class DummyParameterWithSetpointsComplex(ParameterWithSetpoints):
+    """
+    Dummy parameter that returns data with a shape based on the
+    `dummy_n_points` parameter in the instrument. Returns Complex values
+    """
+
+    def get_raw(self):
+        npoints = self.instrument.dummy_n_points()
+        return np.random.rand(npoints) + 1j*np.random.rand(npoints)
+
+
+def setpoint_generator(*sp_bases):
+    """
+    Helper function to generate setpoints in the format that ArrayParameter
+    (and MultiParameter) expects
+
+    Args:
+        *sp_bases:
+
+    Returns:
+
+    """
+    setpoints = []
+    for i, sp_base in enumerate(sp_bases):
+        if i == 0:
+            setpoints.append(sp_base)
+        else:
+            repeats = [len(sp) for sp in sp_bases[:i]]
+            repeats.append(1)
+            setpoints.append(np.tile(sp_base, repeats))
+
+    return tuple(setpoints)
+
+
+class SnapShotTestInstrument(Instrument):
+    """
+    A highly specialized dummy instrument for testing the snapshot. Used by
+    test_snapshot.py
+
+    Args:
+        name: name for the instrument
+        params: parameter names. The instrument will have these as parameters
+        params_to_skip: parameters to skip updating in the snapshot. Must be
+            a subset of params
+    """
+
+    def __init__(self, name: str, params: Sequence[str] = ('v1', 'v2', 'v3'),
+                 params_to_skip: Sequence[str] = ('v2')):
+
+        super().__init__(name)
+
+        if not(set(params_to_skip).issubset(params)):
+            raise ValueError('Invalid input; params_to_skip must be a subset '
+                             'of params')
+
+        self._params_to_skip = params_to_skip
+        self._params = params
+
+        # dict to keep track of how many time 'get' has been called on each
+        # parameter. Useful for testing params_to_skip_update in the snapshot
+        self._get_calls = {p: 0 for p in params}
+
+        for p_name in params:
+
+            self.add_parameter(p_name, label=f'{name} Label', unit='V',
+                               set_cmd=None,
+                               get_cmd=partial(self._getter, p_name))
+
+    def _getter(self, name: str):
+        val = self.parameters[name].cache.get(get_if_invalid=False)
+        self._get_calls[name] += 1
+        return val
+
+    def snapshot_base(self, update: Optional[bool] = True,
+                      params_to_skip_update: Optional[Sequence[str]] = None
+                      ) -> Dict[Any, Any]:
+        if params_to_skip_update is None:
+            params_to_skip_update = self._params_to_skip
+        snap = super().snapshot_base(
+            update=update, params_to_skip_update=params_to_skip_update)
+        return snap
