@@ -2,8 +2,7 @@
 omit =
     __init__.py
     */__init__.py
+    _version.py
     test.py
     tests/*
-    instrument_drivers/*
-    instrument_drivers/*/*
-    utils/reload_code.py
+    instrument_drivers/test.py

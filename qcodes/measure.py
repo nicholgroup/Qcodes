@@ -1,7 +1,8 @@
+from typing import Optional, Sequence
 from datetime import datetime
 
-from qcodes.instrument.parameter import ManualParameter
-from qcodes.loops import Loop, USE_MP
+from qcodes.instrument.parameter import Parameter
+from qcodes.loops import Loop
 from qcodes.actions import _actions_snapshot
 from qcodes.utils.helpers import full_class
 from qcodes.utils.metadata import Metadatable
@@ -12,14 +13,15 @@ class Measure(Metadatable):
     Create a DataSet from a single (non-looped) set of actions.
 
     Args:
-        *actions (any): sequence of actions to perform. Any action that is
+        *actions (Any): sequence of actions to perform. Any action that is
             valid in a ``Loop`` can be used here. If an action is a gettable
             ``Parameter``, its output will be included in the DataSet.
             Scalars returned by an action will be saved as length-1 arrays,
             with a dummy setpoint for consistency with other DataSets.
     """
-    dummy_parameter = ManualParameter(name='single',
-                                      label='Single Measurement')
+    dummy_parameter = Parameter(name='single',
+                                label='Single Measurement',
+                                set_cmd=None, get_cmd=None)
 
     def __init__(self, *actions):
         super().__init__()
@@ -29,11 +31,12 @@ class Measure(Metadatable):
         """
         Wrapper to run this measurement as a temporary data set
         """
-        return self.run(quiet=True, data_manager=False, location=False,
-                        **kwargs)
+        return self.run(quiet=True, location=False, **kwargs)
 
-    def run(self, use_threads=False, quiet=False, data_manager=USE_MP,
-            station=None, **kwargs):
+    def get_data_set(self, *args, **kwargs):
+        return self._dummyLoop.get_data_set(*args, **kwargs)
+
+    def run(self, use_threads=False, quiet=False, station=None, **kwargs):
         """
         Run the actions in this measurement and return their data as a DataSet
 
@@ -48,10 +51,7 @@ class Measure(Metadatable):
             use_threads (Optional[bool]): whether to parallelize ``get``
                 operations using threads. Default False.
 
-            Other kwargs are passed along to data_set.new_data. The key ones
-            are:
-
-            location (Optional[Union[str, False]]): the location of the
+            location (Optional[Union[str, bool]]): the location of the
                 DataSet, a string whose meaning depends on formatter and io,
                 or False to only keep in memory. May be a callable to provide
                 automatic locations. If omitted, will use the default
@@ -67,15 +67,14 @@ class Measure(Metadatable):
             io (Optional[io_manager]): knows how to connect to the storage
                 (disk vs cloud etc)
 
+        location, name formatter and io are passed to ``data_set.new_data``
+        along with any other optional keyword arguments.
+
         returns:
             a DataSet object containing the results of the measurement
         """
 
-        # background is not configurable, would be weird to run this in the bg
-        background = False
-
-        data_set = self._dummyLoop.get_data_set(data_manager=data_manager,
-                                                **kwargs)
+        data_set = self._dummyLoop.get_data_set(**kwargs)
 
         # set the DataSet to local for now so we don't save it, since
         # we're going to massage it afterward
@@ -83,7 +82,7 @@ class Measure(Metadatable):
         data_set.location = False
 
         # run the measurement as if it were a Loop
-        self._dummyLoop.run(background=background, use_threads=use_threads,
+        self._dummyLoop.run(use_threads=use_threads,
                             station=station, quiet=True)
 
         # look for arrays that are unnecessarily nested, and un-nest them
@@ -128,8 +127,7 @@ class Measure(Metadatable):
         # puts in a 'loop' section that we need to replace with 'measurement'
         # but we use the info from 'loop' to ensure consistency and avoid
         # duplication.
-        LOOP_SNAPSHOT_KEYS = ['background', 'ts_start', 'ts_end',
-                              'use_data_manager', 'use_threads']
+        LOOP_SNAPSHOT_KEYS = ['ts_start', 'ts_end', 'use_threads']
         data_set.add_metadata({'measurement': {
             k: data_set.metadata['loop'][k] for k in LOOP_SNAPSHOT_KEYS
         }})
@@ -148,7 +146,8 @@ class Measure(Metadatable):
 
         return data_set
 
-    def snapshot_base(self, update=False):
+    def snapshot_base(self, update: Optional[bool] = False,
+                      params_to_skip_update: Optional[Sequence[str]] = None):
         return {
             '__class__': full_class(self),
             'actions': _actions_snapshot(self._dummyLoop.actions, update)

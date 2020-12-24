@@ -1,11 +1,11 @@
-from qcodes import Instrument
-from qcodes.instrument.parameter import ManualParameter
+from typing import Any, Dict, Optional, Tuple
+
+from qcodes.instrument.base import Instrument
+from qcodes.instrument.parameter import MultiParameter, Parameter, ParamRawDataType
 from qcodes.utils.validators import Bool, Enum
 
-from qcodes.instrument.parameter import Parameter
 
-
-class VoltageParameter(Parameter):
+class VoltageParameter(MultiParameter):
     """
     Amplified voltage measurement via an SR560 preamp and a measured voltage.
 
@@ -16,42 +16,47 @@ class VoltageParameter(Parameter):
     ``VoltageParameter.get()`` returns ``(voltage_raw, voltage)``
 
     Args:
-        measured_param (Parameter): a gettable parameter returning the
+        measured_param: a gettable parameter returning the
             voltage read from the SR560 output.
-
-        v_amp_ins (SR560): an SR560 instance where you manually
+        v_amp_ins: an SR560 instance where you manually
             maintain the present settings of the real SR560 amp.
 
             Note: it should be possible to use other voltage preamps, if they
             define parameters ``gain`` (V_out / V_in) and ``invert``
             (bool, output is inverted)
 
-        name (str): the name of the current output. Default 'curr'.
+        name: the name of the current output. Default 'volt'.
             Also used as the name of the whole parameter.
     """
-    def __init__(self, measured_param, v_amp_ins, name='volt'):
+    def __init__(self,
+                 measured_param: Parameter,
+                 v_amp_ins: "SR560",
+                 name: str = 'volt',
+                 snapshot_value: bool = True):
         p_name = measured_param.name
 
-        super().__init__(name=name, names=(p_name+'_raw', name))
+        super().__init__(name=name,
+                         names=(p_name+'_raw', name),
+                         shapes=((), ()),
+                         instrument=v_amp_ins)
 
         self._measured_param = measured_param
-        self._instrument = v_amp_ins
 
         p_label = getattr(measured_param, 'label', None)
-        p_unit = getattr(measured_param, 'units', None)
+        p_unit = getattr(measured_param, 'unit', None)
 
         self.labels = (p_label, 'Voltage')
         self.units = (p_unit, 'V')
 
-    def get(self):
+    def get_raw(self) -> Tuple[ParamRawDataType, ParamRawDataType]:
         volt = self._measured_param.get()
+        assert isinstance(self._instrument, SR560)
         volt_amp = (volt / self._instrument.gain.get())
 
         if self._instrument.invert.get():
             volt_amp *= -1
 
         value = (volt, volt_amp)
-        self._save_val(value)
         return value
 
 
@@ -62,6 +67,7 @@ class SR560(Instrument):
     This is a virtual driver only and will not talk to your instrument.
 
     Note:
+
     - The ``cutoff_lo`` and ``cutoff_hi`` parameters will interact with
       each other on the instrument (hi cannot be <= lo) but this is not
       managed here, you must ensure yourself that both are correct whenever
@@ -69,44 +75,45 @@ class SR560(Instrument):
 
     - ``gain`` has a vernier setting, which does not yield a well-defined
       output. We restrict this driver to only the predefined gain values.
+
     """
-    def __init__(self, name, **kwargs):
+    def __init__(self, name: str, **kwargs: Any):
         super().__init__(name, **kwargs)
 
-        cutoffs = [0.03, 0.1, 0.3, 1, 3, 10, 30, 100, 300, 1000,
+        cutoffs = ['DC', 0.03, 0.1, 0.3, 1, 3, 10, 30, 100, 300, 1000,
                    3000, 10000, 30000, 100000, 300000, 1000000]
 
         gains = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000,
                  10000, 20000, 50000]
 
         self.add_parameter('cutoff_lo',
-                           parameter_class=ManualParameter,
+                           get_cmd=None, set_cmd=None,
                            initial_value='DC',
                            label='High pass',
-                           units='Hz',
+                           unit='Hz',
                            vals=Enum(*cutoffs))
 
         self.add_parameter('cutoff_hi',
-                           parameter_class=ManualParameter,
-                           initial_value='1e6',
+                           get_cmd=None, set_cmd=None,
+                           initial_value=1e6,
                            label='Low pass',
-                           units='Hz',
+                           unit='Hz',
                            vals=Enum(*cutoffs))
 
         self.add_parameter('invert',
-                           parameter_class=ManualParameter,
+                           get_cmd=None, set_cmd=None,
                            initial_value=True,
                            label='Inverted output',
                            vals=Bool())
 
         self.add_parameter('gain',
-                           parameter_class=ManualParameter,
+                           get_cmd=None, set_cmd=None,
                            initial_value=10,
                            label='Gain',
-                           units=None,
+                           unit=None,
                            vals=Enum(*gains))
 
-    def get_idn(self):
+    def get_idn(self) -> Dict[str, Optional[str]]:
         vendor = 'Stanford Research Systems'
         model = 'SR560'
         serial = None

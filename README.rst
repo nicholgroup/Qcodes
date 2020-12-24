@@ -1,103 +1,31 @@
-QCoDeS |Build Status| |DOCS| |DOI|
-===================================
+QCoDeS |PyPi| |DOCS| |PyPI python versions| |DOI|
+=================================================
+|Build Status Azure| |Build Status Github| |Build Status Github Docs| |Codacy badge|
 
 QCoDeS is a Python-based data acquisition framework developed by the
 Copenhagen / Delft / Sydney / Microsoft quantum computing consortium.
 While it has been developed to serve the needs of nanoelectronic device
 experiments, it is not inherently limited to such experiments, and can
 be used anywhere a system with many degrees of freedom is controllable
-by computer. 
+by computer.
 To learn more about QCoDeS, browse our `homepage <http://qcodes.github.io/Qcodes>`_ .
 
-To get  a feeling of qcodes browse the Jupyter notebooks in `docs/examples
+To get a feeling of QCoDeS read
+`15 minutes to QCoDeS <http://qcodes.github.io/Qcodes/examples/15_minutes_to_QCoDeS.html>`__,
+and/or browse the Jupyter notebooks in `docs/examples
 <https://github.com/QCoDeS/Qcodes/tree/master/docs/examples>`__ .
 
-
-QCoDeS is compatible with Python 3.5+. It is primarily intended for use
+QCoDeS is compatible with Python 3.7+. It is primarily intended for use
 from Jupyter notebooks, but can be used from traditional terminal-based
-shells and in stand-alone scripts as well. Although some feature at the
-moment are b0rken outside the notebook.
+shells and in stand-alone scripts as well. The features in
+`qcodes.utils.magic` are exclusively for Jupyter notebooks.
 
-Status
-------
-QCoDeS is still in development, more documentation and features will be coming!
-The team behind this project just expanded.  There are still rough edges, and
-gray areas but QCoDeS has been running without major issue in two long running
-experiments.
-
-The most important features in the roadmap are:
-
-  - a robust architecture that uses the full potential of your harwdare
-  - a more flexible and faster data storage solution
 
 Install
 =======
 
-This is mostly for tech-y scientist, in general refer to `here <http://qcodes.github.io/Qcodes/start/index.html#installation>`__ 
+In general, refer to `here <http://qcodes.github.io/Qcodes/start/index.html#installation>`__
 for installation.
-
-PyPi
-----
-.. code:: bash
-
-    pip install qcodes
-
-And see if you miss any dependencies.
-
-Plotting Requirements
-^^^^^^^^^^^^^^^^^^^^^^
-
-Because these can sometimes be tricky to install (and not everyone will
-want all of them), the plotting packages are not set as required
-dependencies, so setup.py will not automatically install them. You can
-install them with ``pip``:
-
--  For ``qcodes.MatPlot``: matplotlib version 1.5 or higher
--  For ``qcodes.QtPlot``: pyqtgraph version 0.9.10 or higher
-
-Developer-pyenv
----------------
-
-Core developers use virtualenv and pyenv to make sure all the system are the same,
-this rules out issues and the usual "it works on my machine". Install pyenv
-on your OS `see this <https://github.com/yyuu/pyenv>`__ .
-
-$QCODES_INSTALL_DIR is the folder where you want to have the source code.
-
-.. code:: bash
-
-    git clone https://github.com/QCoDeS/Qcodes.git $QCODES_INSTALL_DIR
-    cd $QCODES_INSTALL_DIR
-    pyenv install 3.5.2
-    pyenv virtualenv 3.5.2 qcodes-dev
-    pip install -r requirements.txt
-    pip install -e .
-    python qcodes/test.py -f
-
-If the tests pass you are ready to hack!
-This is the reference setup one needs to have to contribute, otherwise
-too many non-reproducible environments will show up.
-
-Updating QCoDeS
-===============
-
-from PyPi
----------
-
-.. code:: bash
-
-    pip install  --upgrade qcodes
-
-
-Developer-pyenv/anaconda
-------------------------
-
-.. code:: bash
-
-   cd $QCODES_INSTALL_DIR  && git pull
-
-
-or if using GUIs, just pull the repo!
 
 
 Docs
@@ -106,24 +34,40 @@ Docs
 Read it `here <http://qcodes.github.io/Qcodes>`__ .
 Documentation is updated and deployed on every successful build in master.
 
-
 We use sphinx for documentations, makefiles are provided both for
-Windows, and \*nix.
+Windows, and \*nix, so that you can build the documentation locally.
+
+Make sure that you have the extra dependencies required to install the docs
+
+.. code:: bash
+
+    pip install -r docs_requirements.txt
 
 Go to the directory ``docs`` and
 
 .. code:: bash
 
-    make html
+    make html-api
 
 This generate a webpage, index.html, in ``docs/_build/html`` with the
-rendered html. 
+rendered html.
+
+Code of Conduct
+===============
+
+QCoDeS strictly adheres to the `Microsoft Open Source Code of Conduct <https://opensource.microsoft.com/codeofconduct/>`__
+
 
 Contributing
 ============
 
-See `Contributing <https://github.com/QCoDeS/Qcodes/tree/master/CONTRIBUTING.rst>`__ for information about bug/issue
-reports, contributing code, style, and testing
+The QCoDeS instrument drivers developed by the members of
+the QCoDeS community but not supported by the QCoDeS developers are contained in
+
+https://github.com/QCoDeS/Qcodes_contrib_drivers
+
+See `Contributing <https://github.com/QCoDeS/Qcodes/tree/master/CONTRIBUTING.rst>`__ for general information about bug/issue
+reports, contributing code, style, and testing.
 
 
 
@@ -132,9 +76,20 @@ License
 
 See `License <https://github.com/QCoDeS/Qcodes/tree/master/LICENSE.rst>`__.
 
-.. |Build Status| image:: https://travis-ci.org/QCoDeS/Qcodes.svg?branch=master
-    :target: https://travis-ci.org/QCoDeS/Qcodes
+.. |Build Status Azure| image:: https://dev.azure.com/ms-quantum-public/Microsoft%20Quantum%20(public)/_apis/build/status/QCoDeS.Qcodes%20(public)?branchName=master
+    :target: https://dev.azure.com/ms-quantum-public/Microsoft%20Quantum%20(public)/_build/latest?definitionId=8&branchName=master
+.. |Build Status Github| image:: https://github.com/QCoDeS/Qcodes/workflows/Run%20mypy%20and%20pytest/badge.svg
+    :target: https://github.com/QCoDeS/Qcodes/actions?query=workflow%3A%22Run+mypy+and+pytest%22
+.. |Build Status Github Docs| image:: https://github.com/QCoDeS/Qcodes/workflows/build%20docs/badge.svg
+    :target: https://github.com/QCoDeS/Qcodes/actions?query=workflow%3A%22build+docs%22
+.. |Codacy badge| image:: https://api.codacy.com/project/badge/Grade/6c9e0e5712bf4c6285d6f717aa8e84fa
+    :alt: Codacy Badge
+    :target: https://app.codacy.com/manual/qcodes/Qcodes?utm_source=github.com&utm_medium=referral&utm_content=QCoDeS/Qcodes&utm_campaign=Badge_Grade_Settings
+.. |PyPi| image:: https://badge.fury.io/py/qcodes.svg
+    :target: https://badge.fury.io/py/qcodes
+.. |PyPI python versions| image:: https://img.shields.io/pypi/pyversions/qcodes.svg
+    :target: https://pypi.python.org/pypi/qcodes/
 .. |DOCS| image:: https://img.shields.io/badge/read%20-thedocs-ff66b4.svg
    :target: http://qcodes.github.io/Qcodes
-.. |DOI| image:: https://zenodo.org/badge/37137879.svg
-   :target: https://zenodo.org/badge/latestdoi/37137879
+.. |DOI| image:: https://zenodo.org/badge/DOI/10.5281/zenodo.4280434.svg
+   :target: https://doi.org/10.5281/zenodo.4280434
